@@ -4,6 +4,14 @@ const backendStatusEl = document.getElementById("backend-status");
 const instanceCountEl = document.getElementById("instance-count");
 const refreshBtn = document.getElementById("refresh-btn");
 const createForm = document.getElementById("create-form");
+const mainQrCanvas = document.getElementById("main-qr");
+const mainQrNote = document.getElementById("main-qr-note");
+const mainQrRefresh = document.getElementById("main-qr-refresh");
+
+const QR_REFRESH_MS = 2500;
+const openQrPanels = new Set();
+const qrPollers = new Map();
+let mainQrPoller = null;
 
 function setStatus(message, isError = false) {
   statusEl.textContent = message;
@@ -41,9 +49,26 @@ function renderInstances(instances) {
   instanceCountEl.textContent = String(instances.length);
 
   if (!instances.length) {
+    stopAllQrPolling();
+    openQrPanels.clear();
     instancesEl.innerHTML = '<div class="empty">No instances yet.</div>';
     return;
   }
+
+  const availableIds = new Set(instances.map((instance) => String(instance.id)));
+  openQrPanels.forEach((id) => {
+    if (!availableIds.has(id)) {
+      openQrPanels.delete(id);
+    }
+  });
+  instances.forEach((instance) => {
+    const id = String(instance.id);
+    if (instance.status === "running" && !openQrPanels.has(id)) {
+      openQrPanels.add(id);
+    }
+  });
+
+  stopAllQrPolling();
 
   instancesEl.innerHTML = instances
     .map((instance, index) => {
@@ -55,6 +80,8 @@ function renderInstances(instances) {
       const version = instance.version || "default";
       const port = instance.port ?? "-";
       const pid = instance.pid ?? "-";
+      const instanceId = String(instance.id);
+      const panelClass = openQrPanels.has(instanceId) ? "qr-panel is-open" : "qr-panel";
 
       return `
         <article class="instance-card" style="--i:${index}">
@@ -82,7 +109,7 @@ function renderInstances(instances) {
             }
             <button class="action" data-action="qr" data-id="${instance.id}">Show QR</button>
           </div>
-          <div class="qr-panel" id="qr-panel-${instance.id}">
+          <div class="${panelClass}" id="qr-panel-${instance.id}">
             <div class="qr-canvas" id="qr-${instance.id}"></div>
             <div class="qr-note" id="qr-note-${instance.id}">
               Click "Show QR" to load the latest code.
@@ -97,6 +124,13 @@ function renderInstances(instances) {
       `;
     })
     .join("");
+
+  instances.forEach((instance) => {
+    const instanceId = String(instance.id);
+    if (openQrPanels.has(instanceId)) {
+      startQrPolling(instanceId);
+    }
+  });
 }
 
 async function loadInstances() {
@@ -204,14 +238,17 @@ instancesEl.addEventListener("submit", async (event) => {
   }
 });
 
-loadInstances();
-
 function toggleQrPanel(instanceId) {
   const panel = document.getElementById(`qr-panel-${instanceId}`);
   if (!panel) return;
-  panel.classList.toggle("is-open");
-  if (panel.classList.contains("is-open")) {
-    loadQr(instanceId);
+  const key = String(instanceId);
+  const isOpen = panel.classList.toggle("is-open");
+  if (isOpen) {
+    openQrPanels.add(key);
+    startQrPolling(key);
+  } else {
+    openQrPanels.delete(key);
+    stopQrPolling(key);
   }
 }
 
@@ -250,3 +287,59 @@ async function loadQr(instanceId) {
     note.textContent = `Error: ${error.message}`;
   }
 }
+
+function startQrPolling(instanceId) {
+  const key = String(instanceId);
+  if (qrPollers.has(key)) return;
+  loadQr(key);
+  const handle = setInterval(() => loadQr(key), QR_REFRESH_MS);
+  qrPollers.set(key, handle);
+}
+
+function stopQrPolling(instanceId) {
+  const key = String(instanceId);
+  const handle = qrPollers.get(key);
+  if (handle) {
+    clearInterval(handle);
+    qrPollers.delete(key);
+  }
+}
+
+function stopAllQrPolling() {
+  qrPollers.forEach((handle) => clearInterval(handle));
+  qrPollers.clear();
+}
+
+async function loadMainQr() {
+  if (!mainQrCanvas || !mainQrNote) return;
+  mainQrNote.textContent = "Loading QR...";
+  try {
+    const data = await apiRequest("/instances/main/qr");
+    if (!data || !data.qr) {
+      mainQrCanvas.innerHTML = "";
+      mainQrNote.textContent = "No QR available yet. Start the main instance.";
+      return;
+    }
+    renderQr(mainQrCanvas, data.qr);
+    mainQrNote.textContent = "Scan with WhatsApp within 30 seconds.";
+  } catch (error) {
+    mainQrCanvas.innerHTML = "";
+    mainQrNote.textContent = `Error: ${error.message}`;
+  }
+}
+
+function startMainQrPolling() {
+  if (!mainQrCanvas) return;
+  if (mainQrPoller) clearInterval(mainQrPoller);
+  loadMainQr();
+  mainQrPoller = setInterval(loadMainQr, QR_REFRESH_MS);
+}
+
+if (mainQrRefresh) {
+  mainQrRefresh.addEventListener("click", () => {
+    loadMainQr();
+  });
+}
+
+startMainQrPolling();
+loadInstances();

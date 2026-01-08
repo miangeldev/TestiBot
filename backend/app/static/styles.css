@@ -217,6 +217,16 @@ code {
   gap: 16px;
 }
 
+.main-qr-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.main-qr-card .qr-panel {
+  display: flex;
+}
+
 .instance-card {
   border: 1px solid var(--line);
   border-radius: 16px;
