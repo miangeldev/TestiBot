@@ -11,6 +11,8 @@ class ProcessManager:
         env = os.environ.copy()
         env.update(self.base_env)
         env["ENV_PATH"] = str(env_path)
+        env["INSTANCE_PATH"] = str(cwd)
+        env["QR_PATH"] = str(cwd / "qr.txt")
         process = subprocess.Popen(command, cwd=str(cwd), env=env)
         return process
 
@@ -19,3 +21,12 @@ class ProcessManager:
             os.kill(pid, 15)
         except ProcessLookupError:
             return
+
+    def is_running(self, pid: int) -> bool:
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            return False
+        except PermissionError:
+            return True
+        return True

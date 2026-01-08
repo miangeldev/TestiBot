@@ -13,19 +13,55 @@ function parseArguments() {
     return parsedArgs;
 }
 const args = parseArguments();
+const { spawn } = require('child_process');
 const createSocket = require('./sock');
 const dotenv = require('dotenv');
 
-if (args['main']) {
+const envPath = process.env.ENV_PATH;
+if (envPath) {
+    dotenv.config({ path: envPath });
+} else {
+    dotenv.config();
+}
+
+const isMain = Boolean(args['main']);
+
+if (isMain) {
     global.instance = "main";
 } else {
-    const envPath = process.env.ENV_PATH;
-    if (envPath) {
-        dotenv.config({ path: envPath });
-    } else {
-        dotenv.config();
-    }
     global.instance = process.env.INSTANCE_NAME || process.env.INSTANCE || "Not Found";
+}
+
+let backendProcess = null;
+
+function startBackend() {
+    const backendHost = process.env.BACKEND_HOST || "0.0.0.0";
+    const backendPort = process.env.BACKEND_PORT || "8000";
+    const backendCmd = process.env.BACKEND_CMD || "python";
+    const backendArgs = process.env.BACKEND_ARGS
+        ? process.env.BACKEND_ARGS.split(" ").filter(Boolean)
+        : backendCmd.includes("python")
+            ? ["-m", "uvicorn", "backend.app.main:app", "--host", backendHost, "--port", backendPort]
+            : ["backend.app.main:app", "--host", backendHost, "--port", backendPort];
+
+    const processHandle = spawn(backendCmd, backendArgs, {
+        stdio: "inherit",
+        cwd: __dirname
+    });
+
+    processHandle.on("exit", (code, signal) => {
+        if (code !== null) {
+            console.log(`Backend exited with code ${code}`);
+        } else {
+            console.log(`Backend exited with signal ${signal}`);
+        }
+    });
+
+    return processHandle;
+}
+
+if (isMain && process.env.BACKEND_DISABLED !== "1") {
+    backendProcess = startBackend();
 }
 
 console.log(`Starting instance: ${global.instance}`);
@@ -52,4 +88,20 @@ async function startBot() {
 startBot().catch((error) => {
     console.error('Failed to start bot', error);
     process.exitCode = 1;
+});
+
+function shutdown() {
+    if (backendProcess) {
+        backendProcess.kill("SIGTERM");
+    }
+}
+
+process.on("SIGINT", () => {
+    shutdown();
+    process.exit(0);
+});
+
+process.on("SIGTERM", () => {
+    shutdown();
+    process.exit(0);
 });

@@ -1,14 +1,18 @@
+const fs = require('fs');
 const path = require('path');
-const { default: makeWASocket, useSingleFileAuthState } = require('baileys');
+const { default: makeWASocket, useMultiFileAuthState } = require('baileys');
 
 /**
  * Creates and returns a WhatsApp socket using Baileys.
  * @param {string} [statePath] Path where auth state will be stored.
- * @returns {Promise<import('@adiwajshing/baileys').Socket>} Socket instance.
+ * @returns {Promise<import('baileys').WASocket>} Socket instance.
  */
 async function createSocket(statePath) {
-    const authFile = path.resolve(statePath || path.join(__dirname, 'auth_info.json'));
-    const { state, saveCreds } = await useSingleFileAuthState(authFile);
+    const authDir = path.resolve(statePath || path.join(__dirname, 'auth_info'));
+    const { state, saveCreds } = await useMultiFileAuthState(authDir);
+    const qrPath = process.env.QR_PATH
+        ? path.resolve(process.env.QR_PATH)
+        : path.join(process.cwd(), 'qr.txt');
 
     const socket = makeWASocket({
         auth: state,
@@ -16,8 +20,14 @@ async function createSocket(statePath) {
     });
 
     socket.ev.on('connection.update', (update) => {
-        const { connection, lastDisconnect } = update;
+        const { connection, lastDisconnect, qr } = update;
         console.log('socket connection update', connection);
+        if (qr) {
+            fs.writeFileSync(qrPath, qr, 'utf-8');
+        }
+        if (connection === 'open' && fs.existsSync(qrPath)) {
+            fs.unlinkSync(qrPath);
+        }
         if (lastDisconnect?.error) {
             console.log('last disconnect reason:', lastDisconnect.error.message);
         }

@@ -5,8 +5,8 @@ from typing import Iterable
 from sqlalchemy.orm import Session
 
 from ..models import Instance
-from ..schemas import InstanceCreate
-from .git_manager import clone_repo
+from ..schemas import InstanceCreate, InstanceUpdate
+from .git_manager import clone_repo, update_repo
 from .process_manager import ProcessManager
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -28,7 +28,7 @@ class InstanceManager:
         env_path = instance_path / ".env"
 
         clone_repo(payload.repo_url, instance_path, payload.version)
-        self._write_env(env_path, payload)
+        self._write_env(env_path, payload.name, payload.version, payload.port)
 
         instance = Instance(
             name=payload.name,
@@ -45,6 +45,16 @@ class InstanceManager:
         return instance
 
     def start_instance(self, instance: Instance) -> Instance:
+        if instance.pid:
+            if self.process_manager.is_running(instance.pid):
+                if instance.status != "running":
+                    instance.status = "running"
+                    instance.updated_at = datetime.utcnow()
+                    self.db.commit()
+                    self.db.refresh(instance)
+                return instance
+            instance.pid = None
+
         process = self.process_manager.start_process(
             DEFAULT_START_COMMAND,
             cwd=Path(instance.path),
@@ -68,11 +78,47 @@ class InstanceManager:
         self.db.refresh(instance)
         return instance
 
-    def _write_env(self, env_path: Path, payload: InstanceCreate) -> None:
+    def update_instance(self, instance: Instance, payload: InstanceUpdate) -> Instance:
+        if payload.status and payload.status not in ("running", "stopped"):
+            raise ValueError(f"Invalid status: {payload.status}")
+        desired_status = payload.status or instance.status
+        version_changed = payload.version is not None and payload.version != instance.version
+        port_changed = payload.port is not None and payload.port != instance.port
+        changed = version_changed or port_changed
+
+        if not changed:
+            if desired_status == "running" and instance.status != "running":
+                return self.start_instance(instance)
+            if desired_status == "stopped" and instance.status == "running":
+                return self.stop_instance(instance)
+            return instance
+
+        if instance.status == "running":
+            self.stop_instance(instance)
+
+        if version_changed:
+            update_repo(Path(instance.path), payload.version)
+            instance.version = payload.version
+
+        if port_changed:
+            instance.port = payload.port
+
+        self._write_env(Path(instance.env_path), instance.name, instance.version, instance.port)
+        instance.updated_at = datetime.utcnow()
+        self.db.commit()
+        self.db.refresh(instance)
+
+        if desired_status == "running":
+            return self.start_instance(instance)
+
+        return instance
+
+    def _write_env(self, env_path: Path, name: str, version: str | None, port: int | None) -> None:
         env_lines = [
-            f"INSTANCE_NAME={payload.name}",
-            f"INSTANCE_VERSION={payload.version or ''}",
+            f"INSTANCE={name}",
+            f"INSTANCE_NAME={name}",
+            f"INSTANCE_VERSION={version or ''}",
         ]
-        if payload.port:
-            env_lines.append(f"PORT={payload.port}")
+        if port is not None:
+            env_lines.append(f"PORT={port}")
         env_path.write_text("\n".join(env_lines) + "\n", encoding="utf-8")

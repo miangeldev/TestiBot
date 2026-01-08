@@ -1,4 +1,8 @@
+from pathlib import Path
+
 from fastapi import FastAPI
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
 from .api.instances import router as instances_router
 from .database import Base, engine, SessionLocal
@@ -9,6 +13,14 @@ app = FastAPI(title="TestiBot Backend")
 
 app.include_router(instances_router)
 
+STATIC_DIR = Path(__file__).resolve().parent / "static"
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
+
+@app.get("/", include_in_schema=False)
+def index():
+    return FileResponse(STATIC_DIR / "index.html")
+
 
 @app.on_event("startup")
 def startup():
@@ -16,10 +28,8 @@ def startup():
     db = SessionLocal()
     try:
         manager = InstanceManager(db)
-        running_instances = (
-            db.query(Instance).filter(Instance.status == "running").all()
-        )
-        for instance in running_instances:
+        instances = db.query(Instance).all()
+        for instance in instances:
             manager.start_instance(instance)
     finally:
         db.close()

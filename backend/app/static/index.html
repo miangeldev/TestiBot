@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>TestiBot Control Plane</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <div class="bg-glow" aria-hidden="true"></div>
+    <main class="page">
+      <header class="hero">
+        <div class="hero__meta">
+          <span class="eyebrow">multi-instance manager</span>
+          <h1>TestiBot Control Plane</h1>
+          <p>
+            Create, start, stop, and update WhatsApp bot instances. Each instance
+            is a separate clone with its own env file and version.
+          </p>
+        </div>
+        <div class="hero__status">
+          <div class="status-card">
+            <div class="status-card__label">Backend</div>
+            <div class="status-card__value" id="backend-status">checking</div>
+          </div>
+          <div class="status-card">
+            <div class="status-card__label">Instances</div>
+            <div class="status-card__value" id="instance-count">0</div>
+          </div>
+        </div>
+      </header>
+
+      <section class="grid">
+        <section class="card">
+          <div class="card-header">
+            <h2>Create instance</h2>
+            <span class="pill">clone + env</span>
+          </div>
+          <form id="create-form" class="form">
+            <label class="field">
+              <span>Name</span>
+              <input name="name" required placeholder="bot-alpha" />
+            </label>
+            <label class="field">
+              <span>Repo URL</span>
+              <input name="repo_url" type="url" required placeholder="https://github.com/you/repo.git" />
+            </label>
+            <label class="field">
+              <span>Version (optional)</span>
+              <input name="version" placeholder="tag, branch, or commit" />
+            </label>
+            <label class="field">
+              <span>Port (optional)</span>
+              <input name="port" type="number" min="1" max="65535" placeholder="3000" />
+            </label>
+            <button class="primary" type="submit">Create instance</button>
+          </form>
+          <p class="form-help">
+            New instances live under <code>instances/</code> and keep their own
+            <code>.env</code> with INSTANCE metadata.
+          </p>
+        </section>
+
+        <section class="card card--wide">
+          <div class="card-header">
+            <h2>Instances</h2>
+            <button id="refresh-btn" class="ghost" type="button">Refresh</button>
+          </div>
+          <div id="instances" class="instances"></div>
+        </section>
+      </section>
+
+      <div id="status" class="status" role="status"></div>
+    </main>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script src="/static/app.js"></script>
+  </body>
+</html>
