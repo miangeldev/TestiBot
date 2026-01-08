@@ -13,13 +13,43 @@ function parseArguments() {
     return parsedArgs;
 }
 const args = parseArguments();
+const createSocket = require('./sock');
+const dotenv = require('dotenv');
 
 if (args['main']) {
-    // Main instance
     global.instance = "main";
-} else{
-    // Read .env for other instances
-    require('dotenv').config();
-    global.instance = process.env.INSTANCE || "Not Found";
+} else {
+    const envPath = process.env.ENV_PATH;
+    if (envPath) {
+        dotenv.config({ path: envPath });
+    } else {
+        dotenv.config();
+    }
+    global.instance = process.env.INSTANCE_NAME || process.env.INSTANCE || "Not Found";
 }
+
 console.log(`Starting instance: ${global.instance}`);
+
+async function startBot() {
+    const socket = await createSocket();
+
+    socket.ev.on('messages.upsert', async (messageUpdate) => {
+        const message = messageUpdate.messages?.[0];
+        if (!message || message.key.fromMe) return;
+
+        const text =
+            message.message?.conversation ||
+            message.message?.extendedTextMessage?.text ||
+            '';
+
+        if (!text.trim()) return;
+
+        const reply = `🤖 ${global.instance} recibió: ${text}`;
+        await socket.sendMessage(message.key.remoteJid, { text: reply });
+    });
+}
+
+startBot().catch((error) => {
+    console.error('Failed to start bot', error);
+    process.exitCode = 1;
+});
