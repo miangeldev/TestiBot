@@ -15,8 +15,7 @@ async function createSocket(statePath) {
         : path.join(process.cwd(), 'qr.txt');
 
     const socket = makeWASocket({
-        auth: state,
-        printQRInTerminal: true
+        auth: state
     });
 
     socket.ev.on('connection.update', (update) => {
@@ -25,7 +24,7 @@ async function createSocket(statePath) {
         if (qr) {
             fs.writeFileSync(qrPath, qr, 'utf-8');
         }
-        if (connection === 'open' && fs.existsSync(qrPath)) {
+        if ((connection === 'open' || connection === 'close') && fs.existsSync(qrPath)) {
             fs.unlinkSync(qrPath);
         }
         if (lastDisconnect?.error) {

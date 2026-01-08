@@ -14,6 +14,7 @@ function parseArguments() {
 }
 const args = parseArguments();
 const { spawn } = require('child_process');
+const { DisconnectReason } = require('baileys');
 const createSocket = require('./sock');
 const dotenv = require('dotenv');
 
@@ -33,6 +34,10 @@ if (isMain) {
 }
 
 let backendProcess = null;
+let activeSocket = null;
+let reconnectTimer = null;
+let reconnectAttempts = 0;
+let isShuttingDown = false;
 
 function startBackend() {
     const backendHost = process.env.BACKEND_HOST || "0.0.0.0";
@@ -68,6 +73,7 @@ console.log(`Starting instance: ${global.instance}`);
 
 async function startBot() {
     const socket = await createSocket();
+    activeSocket = socket;
 
     socket.ev.on('messages.upsert', async (messageUpdate) => {
         const message = messageUpdate.messages?.[0];
@@ -83,16 +89,54 @@ async function startBot() {
         const reply = `🤖 ${global.instance} recibió: ${text}`;
         await socket.sendMessage(message.key.remoteJid, { text: reply });
     });
+
+    socket.ev.on('connection.update', (update) => {
+        const { connection, lastDisconnect } = update;
+        if (connection === 'open') {
+            reconnectAttempts = 0;
+        }
+        if (connection === 'close') {
+            const statusCode = lastDisconnect?.error?.output?.statusCode;
+            const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
+            if (shouldReconnect && !isShuttingDown) {
+                scheduleReconnect();
+            } else {
+                console.log('Socket closed, not reconnecting.');
+            }
+        }
+    });
+}
+
+function scheduleReconnect() {
+    if (reconnectTimer || isShuttingDown) return;
+    reconnectAttempts += 1;
+    const delay = Math.min(20000, 2000 * reconnectAttempts);
+    console.log(`Reconnecting in ${delay}ms...`);
+    reconnectTimer = setTimeout(() => {
+        reconnectTimer = null;
+        startBot().catch((error) => {
+            console.error('Failed to reconnect bot', error);
+            scheduleReconnect();
+        });
+    }, delay);
 }
 
 startBot().catch((error) => {
     console.error('Failed to start bot', error);
-    process.exitCode = 1;
+    scheduleReconnect();
 });
 
 function shutdown() {
+    isShuttingDown = true;
+    if (reconnectTimer) {
+        clearTimeout(reconnectTimer);
+        reconnectTimer = null;
+    }
     if (backendProcess) {
         backendProcess.kill("SIGTERM");
+    }
+    if (activeSocket && typeof activeSocket.end === 'function') {
+        activeSocket.end(new Error('Process shutdown'));
     }
 }
 

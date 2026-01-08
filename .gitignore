@@ -4,3 +4,5 @@ package-lock.json
 #ignore pycache files
 __pycache__/
 *.pyc
+
+auth_info
