@@ -7,11 +7,17 @@ const createForm = document.getElementById("create-form");
 const mainQrCanvas = document.getElementById("main-qr");
 const mainQrNote = document.getElementById("main-qr-note");
 const mainQrRefresh = document.getElementById("main-qr-refresh");
+const mainStatusPill = document.getElementById("main-status-pill");
+const mainPidEl = document.getElementById("main-pid");
+const mainNumberEl = document.getElementById("main-number");
+const mainStartBtn = document.getElementById("main-start");
+const mainStopBtn = document.getElementById("main-stop");
 
 const QR_REFRESH_MS = 2500;
 const openQrPanels = new Set();
 const qrPollers = new Map();
 let mainQrPoller = null;
+let mainRunning = false;
 
 function setStatus(message, isError = false) {
   statusEl.textContent = message;
@@ -93,6 +99,7 @@ function renderInstances(instances) {
                 <span>Port: ${escapeHtml(port)}</span>
                 <span>PID: ${escapeHtml(pid)}</span>
                 <span>Last start: ${escapeHtml(lastStarted)}</span>
+                <span>WA: ${escapeHtml(instance.wa_number || "-")}</span>
               </div>
             </div>
             <span class="tag ${statusClass}">${escapeHtml(instance.status)}</span>
@@ -108,6 +115,7 @@ function renderInstances(instances) {
                 : `<button class="action action--primary" data-action="start" data-id="${instance.id}">Start</button>`
             }
             <button class="action" data-action="qr" data-id="${instance.id}">Show QR</button>
+            <button class="action action--danger" data-action="delete" data-id="${instance.id}">Delete</button>
           </div>
           <div class="${panelClass}" id="qr-panel-${instance.id}">
             <div class="qr-canvas" id="qr-${instance.id}"></div>
@@ -194,6 +202,21 @@ instancesEl.addEventListener("click", async (event) => {
 
   if (action === "qr") {
     toggleQrPanel(id);
+    return;
+  }
+
+  if (action === "delete") {
+    if (!confirm("Delete this instance? This will remove its folder.")) {
+      return;
+    }
+    setStatus("Deleting instance...");
+    try {
+      await apiRequest(`/instances/${id}`, { method: "DELETE" });
+      await loadInstances();
+      setStatus("Instance deleted.");
+    } catch (error) {
+      setStatus(`Error: ${error.message}`, true);
+    }
     return;
   }
 
@@ -313,11 +336,16 @@ function stopAllQrPolling() {
 async function loadMainQr() {
   if (!mainQrCanvas || !mainQrNote) return;
   mainQrNote.textContent = "Loading QR...";
+  if (!mainRunning) {
+    mainQrCanvas.innerHTML = "";
+    mainQrNote.textContent = "Main is stopped. Click Start main.";
+    return;
+  }
   try {
     const data = await apiRequest("/instances/main/qr");
     if (!data || !data.qr) {
       mainQrCanvas.innerHTML = "";
-      mainQrNote.textContent = "No QR available yet. Start the main instance.";
+      mainQrNote.textContent = "Waiting for QR...";
       return;
     }
     renderQr(mainQrCanvas, data.qr);
@@ -328,16 +356,75 @@ async function loadMainQr() {
   }
 }
 
+async function loadMainStatus() {
+  if (!mainStatusPill) return;
+  try {
+    const data = await apiRequest("/instances/main/status");
+    mainRunning = Boolean(data?.running);
+    mainStatusPill.textContent = mainRunning ? "running" : "stopped";
+    mainStatusPill.classList.toggle("tag--running", mainRunning);
+    mainStatusPill.classList.toggle("tag--stopped", !mainRunning);
+    if (mainPidEl) {
+      mainPidEl.textContent = data?.pid ? `pid ${data.pid}` : "";
+    }
+    if (mainNumberEl) {
+      mainNumberEl.textContent = data?.wa_number ? `WA ${data.wa_number}` : "";
+    }
+    if (mainStartBtn) mainStartBtn.disabled = mainRunning;
+    if (mainStopBtn) mainStopBtn.disabled = !mainRunning;
+  } catch (error) {
+    mainRunning = false;
+    if (mainPidEl) mainPidEl.textContent = "";
+    if (mainNumberEl) mainNumberEl.textContent = "";
+    mainStatusPill.textContent = "unknown";
+    mainStatusPill.classList.remove("tag--running");
+    mainStatusPill.classList.add("tag--stopped");
+  }
+}
+
 function startMainQrPolling() {
   if (!mainQrCanvas) return;
   if (mainQrPoller) clearInterval(mainQrPoller);
-  loadMainQr();
-  mainQrPoller = setInterval(loadMainQr, QR_REFRESH_MS);
+  const refreshMain = async () => {
+    await loadMainStatus();
+    await loadMainQr();
+  };
+  refreshMain();
+  mainQrPoller = setInterval(refreshMain, QR_REFRESH_MS);
 }
 
 if (mainQrRefresh) {
   mainQrRefresh.addEventListener("click", () => {
+    loadMainStatus();
     loadMainQr();
+  });
+}
+
+if (mainStartBtn) {
+  mainStartBtn.addEventListener("click", async () => {
+    setStatus("Starting main...");
+    try {
+      await apiRequest("/instances/main/start", { method: "POST" });
+      await loadMainStatus();
+      await loadMainQr();
+      setStatus("Main started.");
+    } catch (error) {
+      setStatus(`Error: ${error.message}`, true);
+    }
+  });
+}
+
+if (mainStopBtn) {
+  mainStopBtn.addEventListener("click", async () => {
+    setStatus("Stopping main...");
+    try {
+      await apiRequest("/instances/main/stop", { method: "POST" });
+      await loadMainStatus();
+      await loadMainQr();
+      setStatus("Main stopped.");
+    } catch (error) {
+      setStatus(`Error: ${error.message}`, true);
+    }
   });
 }
 

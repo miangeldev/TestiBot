@@ -13,6 +13,8 @@ function parseArguments() {
     return parsedArgs;
 }
 const args = parseArguments();
+const fs = require('fs');
+const path = require('path');
 const { spawn } = require('child_process');
 const { DisconnectReason } = require('baileys');
 const createSocket = require('./sock');
@@ -26,9 +28,12 @@ if (envPath) {
 }
 
 const isMain = Boolean(args['main']);
+const mainPidPath = path.join(__dirname, 'backend', 'app', 'data', 'main.pid');
 
 if (isMain) {
     global.instance = "main";
+    fs.mkdirSync(path.dirname(mainPidPath), { recursive: true });
+    fs.writeFileSync(mainPidPath, String(process.pid), 'utf-8');
 } else {
     global.instance = process.env.INSTANCE_NAME || process.env.INSTANCE || "Not Found";
 }
@@ -138,6 +143,9 @@ function shutdown() {
     if (activeSocket && typeof activeSocket.end === 'function') {
         activeSocket.end(new Error('Process shutdown'));
     }
+    if (isMain && fs.existsSync(mainPidPath)) {
+        fs.unlinkSync(mainPidPath);
+    }
 }
 
 process.on("SIGINT", () => {
@@ -148,4 +156,10 @@ process.on("SIGINT", () => {
 process.on("SIGTERM", () => {
     shutdown();
     process.exit(0);
+});
+
+process.on("exit", () => {
+    if (isMain && fs.existsSync(mainPidPath)) {
+        fs.unlinkSync(mainPidPath);
+    }
 });

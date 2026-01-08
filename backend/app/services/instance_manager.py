@@ -1,5 +1,6 @@
 from datetime import datetime
 from pathlib import Path
+import shutil
 from typing import Iterable
 
 from sqlalchemy.orm import Session
@@ -122,3 +123,12 @@ class InstanceManager:
         if port is not None:
             env_lines.append(f"PORT={port}")
         env_path.write_text("\n".join(env_lines) + "\n", encoding="utf-8")
+
+    def delete_instance(self, instance: Instance) -> None:
+        if instance.pid:
+            self.process_manager.stop_process(instance.pid)
+        instance_path = Path(instance.path)
+        if instance_path.exists():
+            shutil.rmtree(instance_path)
+        self.db.delete(instance)
+        self.db.commit()

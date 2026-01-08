@@ -25,6 +25,7 @@ class InstanceOut(InstanceBase):
     path: str
     env_path: str
     pid: int | None
+    wa_number: str | None = None
     created_at: datetime
     updated_at: datetime
     last_started_at: datetime | None

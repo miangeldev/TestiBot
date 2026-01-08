@@ -32,8 +32,17 @@
 
       <section class="card main-qr-card">
         <div class="card-header">
-          <h2>Main QR</h2>
-          <button id="main-qr-refresh" class="ghost" type="button">Refresh</button>
+          <div>
+            <h2>Main QR</h2>
+            <span id="main-status-pill" class="tag tag--stopped">stopped</span>
+            <span id="main-pid" class="main-pid"></span>
+            <span id="main-number" class="main-number"></span>
+          </div>
+          <div class="main-actions">
+            <button id="main-start" class="action action--primary" type="button">Start main</button>
+            <button id="main-stop" class="action action--danger" type="button">Stop main</button>
+            <button id="main-qr-refresh" class="ghost" type="button">Refresh</button>
+          </div>
         </div>
         <div class="qr-panel is-open" id="main-qr-panel">
           <div class="qr-canvas" id="main-qr"></div>

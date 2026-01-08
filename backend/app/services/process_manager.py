@@ -7,12 +7,20 @@ class ProcessManager:
     def __init__(self, base_env: dict[str, str] | None = None) -> None:
         self.base_env = base_env or {}
 
-    def start_process(self, command: list[str], cwd: Path, env_path: Path) -> subprocess.Popen:
+    def start_process(
+        self,
+        command: list[str],
+        cwd: Path,
+        env_path: Path,
+        env_overrides: dict[str, str] | None = None,
+    ) -> subprocess.Popen:
         env = os.environ.copy()
         env.update(self.base_env)
         env["ENV_PATH"] = str(env_path)
         env["INSTANCE_PATH"] = str(cwd)
         env["QR_PATH"] = str(cwd / "qr.txt")
+        if env_overrides:
+            env.update(env_overrides)
         process = subprocess.Popen(command, cwd=str(cwd), env=env)
         return process
 
