@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import declarative_base, sessionmaker
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -23,3 +23,20 @@ def get_db():
         yield db
     finally:
         db.close()
+
+
+def ensure_schema() -> None:
+    with engine.begin() as conn:
+        tables = {
+            row[0]
+            for row in conn.execute(
+                text("SELECT name FROM sqlite_master WHERE type='table'")
+            ).fetchall()
+        }
+        if "instances" in tables:
+            columns = {
+                row[1]
+                for row in conn.execute(text("PRAGMA table_info(instances)")).fetchall()
+            }
+            if "owner_id" not in columns:
+                conn.execute(text("ALTER TABLE instances ADD COLUMN owner_id INTEGER"))

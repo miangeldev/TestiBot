@@ -1,3 +1,4 @@
+import shutil
 from pathlib import Path
 
 from ..database import DATA_DIR
@@ -7,6 +8,10 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 MAIN_PID_PATH = DATA_DIR / "main.pid"
 MAIN_ENV_PATH = REPO_ROOT / ".env"
 MAIN_COMMAND = ["node", "index.js", "--main"]
+MAIN_AUTH_DIR = REPO_ROOT / "auth_info"
+MAIN_QR_PATH = REPO_ROOT / "qr.txt"
+MAIN_WA_INFO_PATH = REPO_ROOT / "wa_info.json"
+MAIN_AUTH_FILE = REPO_ROOT / "auth_info.json"
 
 
 class MainManager:
@@ -39,6 +44,15 @@ class MainManager:
             self.process_manager.stop_process(pid)
         self._clear_pid()
         return {"running": False, "pid": None}
+
+    def reset(self) -> dict[str, int | bool | None]:
+        self.stop()
+        if MAIN_AUTH_DIR.exists():
+            shutil.rmtree(MAIN_AUTH_DIR)
+        for target in (MAIN_QR_PATH, MAIN_WA_INFO_PATH, MAIN_AUTH_FILE):
+            if target.exists():
+                target.unlink()
+        return self.start()
 
     def _read_pid(self) -> int | None:
         if not MAIN_PID_PATH.exists():

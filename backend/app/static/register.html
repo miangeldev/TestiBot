@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Create Account · TestiBot</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <div class="bg-glow" aria-hidden="true"></div>
+    <main class="page">
+      <header class="hero">
+        <div class="hero__meta">
+          <span class="eyebrow">multi-instance manager</span>
+          <h1>Create Account</h1>
+          <p>Start managing your own WhatsApp bot instances.</p>
+        </div>
+      </header>
+
+      <section class="card auth-card">
+        <div class="card-header">
+          <h2>Sign up</h2>
+          <span class="pill">new account</span>
+        </div>
+        <form id="register-form" class="form auth-form">
+          <label class="field">
+            <span>Username</span>
+            <input name="username" required autocomplete="username" />
+          </label>
+          <label class="field">
+            <span>Password</span>
+            <input name="password" type="password" required autocomplete="new-password" />
+          </label>
+          <button class="primary" type="submit">Create account</button>
+        </form>
+        <div class="auth-footer">
+          Already have an account? <a href="/login">Sign in</a>
+        </div>
+      </section>
+
+      <div id="status" class="status" role="status"></div>
+    </main>
+
+    <script src="/static/auth.js"></script>
+  </body>
+</html>

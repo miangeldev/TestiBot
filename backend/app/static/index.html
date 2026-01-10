@@ -30,7 +30,12 @@
         </div>
       </header>
 
-      <section class="card main-qr-card">
+      <div class="auth-bar">
+        <div id="auth-user" class="auth-user">Not signed in</div>
+        <button id="logout-btn" class="ghost" type="button" disabled>Logout</button>
+      </div>
+
+      <section id="main-card" class="card main-qr-card is-hidden">
         <div class="card-header">
           <div>
             <h2>Main QR</h2>
@@ -41,6 +46,7 @@
           <div class="main-actions">
             <button id="main-start" class="action action--primary" type="button">Start main</button>
             <button id="main-stop" class="action action--danger" type="button">Stop main</button>
+            <button id="main-reset" class="action" type="button">Reset session</button>
             <button id="main-qr-refresh" class="ghost" type="button">Refresh</button>
           </div>
         </div>
@@ -62,16 +68,10 @@
               <input name="name" required placeholder="bot-alpha" />
             </label>
             <label class="field">
-              <span>Repo URL</span>
-              <input name="repo_url" type="url" required placeholder="https://github.com/you/repo.git" />
-            </label>
-            <label class="field">
-              <span>Version (optional)</span>
-              <input name="version" placeholder="tag, branch, or commit" />
-            </label>
-            <label class="field">
-              <span>Port (optional)</span>
-              <input name="port" type="number" min="1" max="65535" placeholder="3000" />
+              <span>Version (branch)</span>
+              <select name="version" id="version-select">
+                <option value="">Default branch</option>
+              </select>
             </label>
             <button class="primary" type="submit">Create instance</button>
           </form>
