@@ -1,4 +1,5 @@
 from datetime import datetime
+import os
 from pathlib import Path
 import shutil
 from typing import Iterable
@@ -13,6 +14,7 @@ from .process_manager import ProcessManager
 REPO_ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_INSTANCES_DIR = REPO_ROOT / "instances"
 DEFAULT_START_COMMAND = ["node", "index.js"]
+DEFAULT_REPO_URL = os.environ.get("REPO_URL", "https://github.com/miangeldev/TestiBot.git")
 
 
 class InstanceManager:
@@ -20,15 +22,18 @@ class InstanceManager:
         self.db = db
         self.process_manager = process_manager or ProcessManager()
 
-    def list_instances(self) -> Iterable[Instance]:
-        return self.db.query(Instance).all()
+    def list_instances(self, owner_id: int | None = None) -> Iterable[Instance]:
+        query = self.db.query(Instance)
+        if owner_id is not None:
+            query = query.filter(Instance.owner_id == owner_id)
+        return query.all()
 
-    def create_instance(self, payload: InstanceCreate) -> Instance:
+    def create_instance(self, payload: InstanceCreate, owner_id: int | None = None) -> Instance:
         instances_dir = DEFAULT_INSTANCES_DIR
         instance_path = instances_dir / payload.name
         env_path = instance_path / ".env"
 
-        clone_repo(payload.repo_url, instance_path, payload.version)
+        clone_repo(DEFAULT_REPO_URL, instance_path, payload.version)
         self._write_env(env_path, payload.name, payload.version, payload.port)
 
         instance = Instance(
@@ -38,6 +43,7 @@ class InstanceManager:
             env_path=str(env_path),
             version=payload.version,
             port=payload.port,
+            owner_id=owner_id,
             updated_at=datetime.utcnow(),
         )
         self.db.add(instance)
@@ -78,6 +84,19 @@ class InstanceManager:
         self.db.commit()
         self.db.refresh(instance)
         return instance
+
+    def reset_session(self, instance: Instance) -> Instance:
+        if instance.pid:
+            self.process_manager.stop_process(instance.pid)
+        instance.status = "stopped"
+        instance.pid = None
+
+        self._clear_auth(Path(instance.path))
+        instance.updated_at = datetime.utcnow()
+        self.db.commit()
+        self.db.refresh(instance)
+
+        return self.start_instance(instance)
 
     def update_instance(self, instance: Instance, payload: InstanceUpdate) -> Instance:
         if payload.status and payload.status not in ("running", "stopped"):
@@ -132,3 +151,12 @@ class InstanceManager:
             shutil.rmtree(instance_path)
         self.db.delete(instance)
         self.db.commit()
+
+    def _clear_auth(self, instance_path: Path) -> None:
+        auth_dir = instance_path / "auth_info"
+        if auth_dir.exists():
+            shutil.rmtree(auth_dir)
+        for filename in ("wa_info.json", "qr.txt", "auth_info.json"):
+            target = instance_path / filename
+            if target.exists():
+                target.unlink()

@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Sign In · TestiBot</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <div class="bg-glow" aria-hidden="true"></div>
+    <main class="page">
+      <header class="hero">
+        <div class="hero__meta">
+          <span class="eyebrow">multi-instance manager</span>
+          <h1>Welcome Back</h1>
+          <p>Sign in to manage your WhatsApp bot instances.</p>
+        </div>
+      </header>
+
+      <section class="card auth-card">
+        <div class="card-header">
+          <h2>Sign in</h2>
+          <span class="pill">secure access</span>
+        </div>
+        <form id="login-form" class="form auth-form">
+          <label class="field">
+            <span>Username</span>
+            <input name="username" required autocomplete="username" />
+          </label>
+          <label class="field">
+            <span>Password</span>
+            <input name="password" type="password" required autocomplete="current-password" />
+          </label>
+          <button class="primary" type="submit">Login</button>
+        </form>
+        <div class="auth-footer">
+          New here? <a href="/register">Create an account</a>
+        </div>
+      </section>
+
+      <div id="status" class="status" role="status"></div>
+    </main>
+
+    <script src="/static/auth.js"></script>
+  </body>
+</html>

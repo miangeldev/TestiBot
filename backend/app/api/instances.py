@@ -6,28 +6,48 @@ from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..models import Instance
+from ..auth import get_current_user
+from ..models import User
 from ..schemas import InstanceCreate, InstanceOut, InstanceUpdate
 from ..services.main_manager import MainManager
-from ..services.instance_manager import InstanceManager
+from ..services.instance_manager import DEFAULT_REPO_URL, InstanceManager
+from ..services.git_manager import list_remote_branches
 
 router = APIRouter(prefix="/instances", tags=["instances"])
 REPO_ROOT = Path(__file__).resolve().parents[3]
+MAIN_OWNER_USERNAME = "miangeldev"
 
 
 @router.get("/", response_model=list[InstanceOut])
-def list_instances(db: Session = Depends(get_db)):
+def list_instances(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     manager = InstanceManager(db)
-    instances = list(manager.list_instances())
+    instances = list(manager.list_instances(current_user.id))
     for instance in instances:
         _attach_wa_number(instance)
     return instances
 
 
+@router.get("/branches")
+def list_branches(current_user: User = Depends(get_current_user)):
+    try:
+        branches = list_remote_branches(DEFAULT_REPO_URL)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    return {"branches": branches}
+
+
 @router.post("/", response_model=InstanceOut)
-def create_instance(payload: InstanceCreate, db: Session = Depends(get_db)):
+def create_instance(
+    payload: InstanceCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     manager = InstanceManager(db)
     try:
-        instance = manager.create_instance(payload)
+        instance = manager.create_instance(payload, owner_id=current_user.id)
         _attach_wa_number(instance)
         return instance
     except FileExistsError as exc:
@@ -39,10 +59,13 @@ def create_instance(payload: InstanceCreate, db: Session = Depends(get_db)):
 
 
 @router.patch("/{instance_id}", response_model=InstanceOut)
-def update_instance(instance_id: int, payload: InstanceUpdate, db: Session = Depends(get_db)):
-    instance = db.query(Instance).get(instance_id)
-    if not instance:
-        raise HTTPException(status_code=404, detail="Instance not found")
+def update_instance(
+    instance_id: int,
+    payload: InstanceUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    instance = _get_instance_for_user(db, instance_id, current_user.id)
     manager = InstanceManager(db)
     try:
         instance = manager.update_instance(instance, payload)
@@ -53,10 +76,12 @@ def update_instance(instance_id: int, payload: InstanceUpdate, db: Session = Dep
 
 
 @router.post("/{instance_id}/start", response_model=InstanceOut)
-def start_instance(instance_id: int, db: Session = Depends(get_db)):
-    instance = db.query(Instance).get(instance_id)
-    if not instance:
-        raise HTTPException(status_code=404, detail="Instance not found")
+def start_instance(
+    instance_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    instance = _get_instance_for_user(db, instance_id, current_user.id)
     manager = InstanceManager(db)
     instance = manager.start_instance(instance)
     _attach_wa_number(instance)
@@ -64,10 +89,12 @@ def start_instance(instance_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/{instance_id}/stop", response_model=InstanceOut)
-def stop_instance(instance_id: int, db: Session = Depends(get_db)):
-    instance = db.query(Instance).get(instance_id)
-    if not instance:
-        raise HTTPException(status_code=404, detail="Instance not found")
+def stop_instance(
+    instance_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    instance = _get_instance_for_user(db, instance_id, current_user.id)
     manager = InstanceManager(db)
     instance = manager.stop_instance(instance)
     _attach_wa_number(instance)
@@ -75,23 +102,27 @@ def stop_instance(instance_id: int, db: Session = Depends(get_db)):
 
 
 @router.delete("/{instance_id}")
-def delete_instance(instance_id: int, db: Session = Depends(get_db)):
-    instance = db.query(Instance).get(instance_id)
-    if not instance:
-        raise HTTPException(status_code=404, detail="Instance not found")
+def delete_instance(
+    instance_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    instance = _get_instance_for_user(db, instance_id, current_user.id)
     manager = InstanceManager(db)
     manager.delete_instance(instance)
     return {"status": "deleted"}
 
 
 @router.get("/main/qr")
-def get_main_qr():
+def get_main_qr(current_user: User = Depends(get_current_user)):
+    _require_main_access(current_user)
     qr_path = REPO_ROOT / "qr.txt"
     return _read_qr(qr_path)
 
 
 @router.get("/main/status")
-def get_main_status():
+def get_main_status(current_user: User = Depends(get_current_user)):
+    _require_main_access(current_user)
     manager = MainManager()
     status = manager.status()
     status["wa_number"] = _read_wa_number(REPO_ROOT)
@@ -99,24 +130,48 @@ def get_main_status():
 
 
 @router.post("/main/start")
-def start_main():
+def start_main(current_user: User = Depends(get_current_user)):
+    _require_main_access(current_user)
     manager = MainManager()
     return manager.start()
 
 
 @router.post("/main/stop")
-def stop_main():
+def stop_main(current_user: User = Depends(get_current_user)):
+    _require_main_access(current_user)
     manager = MainManager()
     return manager.stop()
 
 
+@router.post("/main/reset")
+def reset_main(current_user: User = Depends(get_current_user)):
+    _require_main_access(current_user)
+    manager = MainManager()
+    return manager.reset()
+
+
 @router.get("/{instance_id}/qr")
-def get_instance_qr(instance_id: int, db: Session = Depends(get_db)):
-    instance = db.query(Instance).get(instance_id)
-    if not instance:
-        raise HTTPException(status_code=404, detail="Instance not found")
+def get_instance_qr(
+    instance_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    instance = _get_instance_for_user(db, instance_id, current_user.id)
     qr_path = Path(instance.path) / "qr.txt"
     return _read_qr(qr_path)
+
+
+@router.post("/{instance_id}/reset", response_model=InstanceOut)
+def reset_instance_session(
+    instance_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    instance = _get_instance_for_user(db, instance_id, current_user.id)
+    manager = InstanceManager(db)
+    instance = manager.reset_session(instance)
+    _attach_wa_number(instance)
+    return instance
 
 
 def _read_qr(qr_path: Path):
@@ -144,3 +199,19 @@ def _read_wa_number(instance_path: Path) -> str | None:
     if isinstance(number, str) and number.strip():
         return number.strip()
     return None
+
+
+def _get_instance_for_user(db: Session, instance_id: int, user_id: int) -> Instance:
+    instance = (
+        db.query(Instance)
+        .filter(Instance.id == instance_id, Instance.owner_id == user_id)
+        .first()
+    )
+    if not instance:
+        raise HTTPException(status_code=404, detail="Instance not found")
+    return instance
+
+
+def _require_main_access(current_user: User) -> None:
+    if current_user.username != MAIN_OWNER_USERNAME:
+        raise HTTPException(status_code=403, detail="Not authorized to access main instance")

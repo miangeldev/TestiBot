@@ -125,6 +125,61 @@ p {
   animation-delay: 0.12s;
 }
 
+.auth-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 16px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid var(--line);
+}
+
+.auth-user {
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.auth-card {
+  padding: 22px;
+  max-width: 520px;
+  margin: 0 auto;
+}
+
+.auth-grid {
+  display: grid;
+  grid-template-columns: minmax(200px, 1fr) auto minmax(200px, 1fr);
+  gap: 16px;
+  align-items: center;
+}
+
+.auth-divider {
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  font-size: 0.75rem;
+  color: var(--muted);
+  text-align: center;
+}
+
+.auth-form {
+  gap: 12px;
+}
+
+.auth-footer {
+  margin-top: 16px;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.auth-footer a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.auth-footer a:hover {
+  text-decoration: underline;
+}
+
 .card-header {
   display: flex;
   align-items: center;
@@ -165,7 +220,22 @@ p {
   background: #fff;
 }
 
+.field select {
+  width: 100%;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  padding: 12px 14px;
+  font-size: 0.95rem;
+  background: #fff;
+  font-family: inherit;
+}
+
 .field input:focus {
+  outline: 2px solid rgba(31, 157, 146, 0.35);
+  border-color: transparent;
+}
+
+.field select:focus {
   outline: 2px solid rgba(31, 157, 146, 0.35);
   border-color: transparent;
 }
@@ -244,6 +314,14 @@ code {
   margin-left: 8px;
   font-size: 0.85rem;
   color: var(--ink);
+}
+
+.is-hidden {
+  display: none;
+}
+
+.app-sections.is-hidden {
+  display: none;
 }
 
 .instance-card {
@@ -363,15 +441,17 @@ code {
 
 .update-form {
   display: grid;
-  grid-template-columns: minmax(140px, 1fr) minmax(120px, 1fr) auto;
+  grid-template-columns: minmax(180px, 1fr) auto;
   gap: 8px;
 }
 
-.update-form input {
+.update-form input,
+.update-form select {
   border-radius: 10px;
   border: 1px solid var(--line);
   padding: 8px 10px;
   font-size: 0.85rem;
+  font-family: inherit;
 }
 
 .status {
@@ -419,6 +499,10 @@ code {
   }
 
   .update-form {
+    grid-template-columns: 1fr;
+  }
+
+  .auth-grid {
     grid-template-columns: 1fr;
   }
 }

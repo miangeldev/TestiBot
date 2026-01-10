@@ -90,3 +90,36 @@ def _should_skip_untracked(rel_path: str) -> bool:
     if parts[0:3] == ("backend", "app", "data"):
         return True
     return False
+
+
+def list_remote_branches(repo_url: str) -> list[str]:
+    if _is_local_repo(repo_url):
+        try:
+            output = subprocess.check_output(
+                ["git", "for-each-ref", "--format=%(refname:short)", "refs/heads"],
+                cwd=str(Path(repo_url).expanduser().resolve()),
+                text=True,
+            )
+        except subprocess.CalledProcessError as exc:
+            raise RuntimeError(f"Failed to list branches: {repo_url}") from exc
+        branches = [line.strip() for line in output.splitlines() if line.strip()]
+        return sorted(set(branches))
+
+    try:
+        output = subprocess.check_output(
+            ["git", "ls-remote", "--heads", repo_url],
+            text=True,
+        )
+    except subprocess.CalledProcessError as exc:
+        raise RuntimeError(f"Failed to list branches: {repo_url}") from exc
+
+    branches = []
+    for line in output.splitlines():
+        parts = line.strip().split()
+        if len(parts) != 2:
+            continue
+        ref = parts[1]
+        if not ref.startswith("refs/heads/"):
+            continue
+        branches.append(ref.replace("refs/heads/", "", 1))
+    return sorted(set(branches))
